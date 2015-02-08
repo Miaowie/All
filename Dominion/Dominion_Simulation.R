@@ -45,16 +45,20 @@ draw_hand = function(){
 }
 
 draw = function(n){
- if (length(deck) >= n){
+  if (length(deck) >= n){
+    cards_drawn = deck[1:n]
     hand <<- c(hand,deck[1:n])
     deck <<- deck[-(1:n)] 
   } else {
-    hand <<- deck
+    cards_drawn = deck
+    hand <<- c(hand, deck)
+    deck <<- c()
     if (length(discard) > 0 ) {
       discard_to_deck()
-      draw(n - length(hand)) 
+      cards_drawn = c(cards_drawn, draw(n - length(cards_drawn)))
     }
   }
+  return(cards_drawn)
 }
 
 discard_to_deck = function(){
@@ -63,27 +67,49 @@ discard_to_deck = function(){
   shuffle()
 }
 
+card_desc = function(card_ids){
+  return(cards[card_ids])
+}
+
+deck_all = function() {c(deck, hand, discard)}
+
+deck_count = function(card_id){sum(deck_all() == card_id)}
+
 play_hand = function(){
   actions = 1
   buys = 1
   income = 0
-  hand1 = data.table(id = hand, key = "id")
-  hand1 = cards[hand1]
+  hand_played = c()
+  hand_unplayed = hand
+  #hand1 = data.table(id = hand_unplayed, key = "id")
+  #hand1 = cards[hand1]
 
   # Play action cards 
-  do while(actions > 0 & hand[type == "Action"]) {
-    action_cards =  hand1[type == "Action"]
+  while(actions > 0 & nrow(cards[hand_unplayed][type == "Action"]) > 0) {
+    action_card = strategy$action_priorities[id %in% hand_unplayed][order(priority)][1]
+    if(play_action(action_card$id)) {
+      actions = actions - 1
+    } 
+    hand_played = c(hand_played, action_card$id)
+    hand_unplayed = hand_unplayed[-which(hand_unplayed == action_card$id)[1]]
   }  
   
-  play_action()
-
   # Buy cards
-  income = income + hand1[type == "Treasure", sum(income)]
+  income = income + cards[hand][type == "Treasure", sum(income)]
   hand <<- c(hand, buy_cards(income, buys))
   
   # Discards
   discard <<- c(discard, hand)
   hand <<- c() 
+}
+
+play_action = function(card_id){
+  action_card = cards[card_id]
+  actions = actions + action_card$actions
+  hand_unplayed = c(hand_unplayed , draw(action_card$cards))
+  buys = buys + action_card$buys
+  income = income + action_card$income
+  return(T)
 }
 
 buy_cards = function(coins, buys){
@@ -111,11 +137,17 @@ buy_cards = function(coins, buys){
 }
 
 use_strategy = function(strat){
+  strat_init = list()
+  strat_init$name = strat$name
   cards1 = data.table(cards, key = "name")
   buy_priorities = data.table(name = strat$buy_priorities, priority = seq_len(length(strat$buy_priorities)),
 	max_buys = strat$max_buys,  key = "name")
-  strat[["buy_priorities"]] = cards1[buy_priorities][order(priority)]
-  return(strat)
+  strat_init[["buy_priorities"]] = cards1[buy_priorities][order(priority)]
+  action_priorities = data.table(name = strat$action_priorities, priority = seq_len(length(strat$action_priorities)),
+	key = "name")
+  strat_init[["action_priorities"]] = cards1[action_priorities][order(priority)]
+  setkeyv(strat_init[["action_priorities"]], "id")
+  return(strat_init)
 }
 
 calculate_vp = function(){
