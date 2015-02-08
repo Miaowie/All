@@ -71,7 +71,11 @@ play_hand = function(){
   hand1 = cards[hand1]
 
   # Play action cards 
-  actions = hand1[type == "Action", sum(income)]
+  do while(actions > 0 & hand[type == "Action"]) {
+    action_cards =  hand1[type == "Action"]
+  }  
+  
+  play_action()
 
   # Buy cards
   income = income + hand1[type == "Treasure", sum(income)]
